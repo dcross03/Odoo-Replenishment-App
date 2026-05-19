@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: odoo-replenishment-webhook
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: webhook
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: ODOO_URL
+        sync: false
+      - key: ODOO_DB
+        sync: false
+      - key: ODOO_USERNAME
+        sync: false
+      - key: ODOO_API_KEY
+        sync: false
+      - key: WEBHOOK_SHARED_SECRET
+        sync: false

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Replenishment Digest — {{ run_date }}</title>
+{% include "base.css.inc.html" %}
+</head>
+<body>
+<div class="wrap">
+  <h1>Replenishment Digest</h1>
+  <div class="meta">{{ run_date }} • Cutover: {{ cutover_date }} • Week {{ n_weeks }} of blend</div>
+
+  {% if digests %}
+  <h2>Vendors with Urgent Items</h2>
+  {% for d in digests %}
+    <div class="vendor-block">
+      <div class="vendor-name">{{ d.vendor_name }}</div>
+      <div class="summary">
+        {{ d.urgent|length }} urgent
+        {%- if d.addon %} • {{ d.addon|length }} add-on{% endif -%}
+        {%- if d.low_stock_extras %} • {{ d.low_stock_extras|length }} other low-stock{% endif -%}
+      </div>
+      <a class="btn" href="{{ d.create_po_url }}">Create Draft PO in Odoo →</a>
+      <div class="btn-explainer" style="font-size:11px; color:#666; margin: 2px 0 8px 0;">
+        Creates a draft with all <strong>urgent + add-on</strong> items below ({{ d.po_line_count }} lines).
+        Other low-stock items below are listed for reference only.
+      </div>
+    </div>
+
+    <h3>Urgent — {{ d.vendor_name }}</h3>
+    <table>
+      <tr>
+        <th>SKU</th><th>Product</th>
+        <th class="num">Forecast</th>
+        <th class="num">Demand/mo</th><th class="num">MoS</th><th class="num">Lead</th>
+        <th class="num">Suggested Qty</th><th class="num">Est. Cost</th><th>Status</th>
+      </tr>
+      {% for r in d.urgent %}
+      <tr>
+        <td class="sku">{{ r.product.default_code }}</td>
+        <td>{{ r.product.name }}</td>
+        <td class="num {% if r.product.virtual_available < 0 %}neg{% endif %}">{{ r.product.virtual_available|round(0)|int }}</td>
+        <td class="num">{{ r.velocity.monthly_total|round(0)|int }}</td>
+        <td class="num">{{ fmt_mos(r.months_of_stock) }}</td>
+        <td class="num">{{ (r.lead_time_months * 30)|round(0)|int }}d</td>
+        <td class="num">{{ r.suggested_order_qty|round(0)|int }}</td>
+        <td class="num">${{ "%.2f"|format(r.suggested_total_price) }}</td>
+        <td>{{ tags_for(r)|safe }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+
+    {% if d.addon %}
+    <h3>Add-on Candidates — {{ d.vendor_name }}</h3>
+    <p style="font-size:12px; color:#666;">Not urgent, but consider including on this PO to save on shipping.</p>
+    <table>
+      <tr>
+        <th>SKU</th><th>Product</th>
+        <th class="num">Forecast</th>
+        <th class="num">Demand/mo</th><th class="num">MoS</th><th class="num">Lead</th>
+        <th class="num">Suggested Qty</th><th class="num">Est. Cost</th><th>Status</th>
+      </tr>
+      {% for r in d.addon %}
+      <tr>
+        <td class="sku">{{ r.product.default_code }}</td>
+        <td>{{ r.product.name }}</td>
+        <td class="num {% if r.product.virtual_available < 0 %}neg{% endif %}">{{ r.product.virtual_available|round(0)|int }}</td>
+        <td class="num">{{ r.velocity.monthly_total|round(0)|int }}</td>
+        <td class="num">{{ fmt_mos(r.months_of_stock) }}</td>
+        <td class="num">{{ (r.lead_time_months * 30)|round(0)|int }}d</td>
+        <td class="num">{{ r.suggested_order_qty|round(0)|int }}</td>
+        <td class="num">${{ "%.2f"|format(r.suggested_total_price) }}</td>
+        <td>{{ tags_for(r)|safe }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+
+    {% if d.low_stock_extras %}
+    <h3>Other Low-Stock Items — {{ d.vendor_name }}</h3>
+    <p style="font-size:12px; color:#666;">
+      Below {{ low_stock_threshold|int }} units forecasted but not above the alert threshold. Not auto-added to the draft PO.
+    </p>
+    <table>
+      <tr>
+        <th>SKU</th><th>Product</th>
+        <th class="num">Forecast</th>
+        <th class="num">Demand/mo</th><th class="num">MoS</th>
+      </tr>
+      {% for r in d.low_stock_extras %}
+      <tr>
+        <td class="sku">{{ r.product.default_code }}</td>
+        <td>{{ r.product.name }}</td>
+        <td class="num {% if r.product.virtual_available < 0 %}neg{% endif %}">{{ r.product.virtual_available|round(0)|int }}</td>
+        <td class="num">{{ r.velocity.monthly_total|round(0)|int }}</td>
+        <td class="num">{{ fmt_mos(r.months_of_stock) }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
+
+  {% if unassigned %}
+  <h2>Unassigned Vendor</h2>
+  <p style="font-size:13px; color:#555;">These items need a vendor assigned in Odoo before they can be reordered.</p>
+  <table>
+    <tr>
+      <th>SKU</th><th>Product</th>
+      <th class="num">Forecast</th>
+      <th class="num">Demand/mo</th><th class="num">MoS</th><th></th>
+    </tr>
+    {% for r in unassigned %}
+    <tr>
+      <td class="sku">{{ r.product.default_code }}</td>
+      <td>{{ r.product.name }}</td>
+      <td class="num {% if r.product.virtual_available < 0 %}neg{% endif %}">{{ r.product.virtual_available|round(0)|int }}</td>
+      <td class="num">{{ r.velocity.monthly_total|round(0)|int }}</td>
+      <td class="num">{{ fmt_mos(r.months_of_stock) }}</td>
+      <td>{{ tags_for(r)|safe }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {% if orphan_low_stock %}
+  <h2>Low Stock — Catchall</h2>
+  <p style="font-size:13px; color:#555;">
+    Items below {{ low_stock_threshold|int }} units forecasted whose vendor isn't already getting an urgent alert.
+    Sorted by vendor, then SKU.
+  </p>
+  <table>
+    <tr>
+      <th>SKU</th><th>Product</th><th>Vendor</th>
+      <th class="num">Forecast</th>
+      <th class="num">Demand/mo</th><th class="num">MoS</th>
+    </tr>
+    {% for r in orphan_low_stock %}
+    <tr>
+      <td class="sku">{{ r.product.default_code }}</td>
+      <td>{{ r.product.name }}</td>
+      <td>{{ r.vendor_name }}</td>
+      <td class="num {% if r.product.virtual_available < 0 %}neg{% endif %}">{{ r.product.virtual_available|round(0)|int }}</td>
+      <td class="num">{{ r.velocity.monthly_total|round(0)|int }}</td>
+      <td class="num">{{ fmt_mos(r.months_of_stock) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  <div class="footer">
+    Generated automatically every Wednesday at 6 AM MT.
+    Months of Stock = Forecasted Qty ÷ (Direct Velocity + BOM Component Rollup).
+    Velocity is a gradual blend of Sage and Odoo data, weighted by weeks since cutover.
+  </div>
+</div>
+</body>
+</html>

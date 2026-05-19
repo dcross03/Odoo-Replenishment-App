@@ -1,0 +1,75 @@
+name: Weekly Replenishment Digest
+
+on:
+  # Wednesday 12:00 UTC == 6:00 AM MDT (summer) or 5:00 AM MST (winter)
+  # Note: cron times in GitHub Actions are always UTC.
+  schedule:
+    - cron: "0 12 * * 3"
+
+  # Allow manual triggering from the Actions tab
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run? (writes HTML artifact, does not send email)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      today_override:
+        description: "Override today's date (YYYY-MM-DD), optional"
+        required: false
+        default: ""
+
+jobs:
+  run-replenishment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run replenishment digest
+        env:
+          ODOO_URL: ${{ secrets.ODOO_URL }}
+          ODOO_DB: ${{ secrets.ODOO_DB }}
+          ODOO_USERNAME: ${{ secrets.ODOO_USERNAME }}
+          ODOO_API_KEY: ${{ secrets.ODOO_API_KEY }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          WEBHOOK_BASE_URL: ${{ secrets.WEBHOOK_BASE_URL }}
+          WEBHOOK_SHARED_SECRET: ${{ secrets.WEBHOOK_SHARED_SECRET }}
+          ODOO_CUTOVER_DATE: ${{ vars.ODOO_CUTOVER_DATE }}
+          URGENT_BUFFER_MONTHS: ${{ vars.URGENT_BUFFER_MONTHS }}
+          ADDON_BUFFER_MONTHS: ${{ vars.ADDON_BUFFER_MONTHS }}
+          LOW_STOCK_THRESHOLD: ${{ vars.LOW_STOCK_THRESHOLD }}
+        run: |
+          DRY_RUN_FLAG=""
+          TODAY_FLAG=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          if [ -n "${{ github.event.inputs.today_override }}" ]; then
+            TODAY_FLAG="--today ${{ github.event.inputs.today_override }}"
+          fi
+          python scripts/run_replenishment.py $DRY_RUN_FLAG $TODAY_FLAG
+
+      - name: Upload dry-run digest as artifact
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ github.run_id }}
+          path: output/digest.html
+          retention-days: 30
