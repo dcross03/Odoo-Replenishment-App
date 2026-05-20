@@ -122,7 +122,7 @@ def _fetch_line_specs(
             qty = picked.get("min_qty") or 1.0
             price = picked.get("price") or 0.0
 
-       # Description matches Odoo's UI behavior: "[SKU] Name" on the first line,
+        # Description matches Odoo's UI behavior: "[SKU] Name" on the first line,
         # then the Purchase Description (from the product's Purchase tab) on
         # subsequent lines if present.
         base_desc = f"[{p.get('default_code') or ''}] {p.get('name') or ''}".strip()
@@ -150,6 +150,15 @@ def create_draft_po(
             "No valid product lines for this vendor (empty product_ids?)"
         )
 
+    # Fetch vendor defaults that Odoo would normally onchange-populate from
+    # partner_id but doesn't fire over XML-RPC create.
+    vendor = _execute(cfg, uid, models, "res.partner", "read",
+                       [[vendor_id]],
+                       {"fields": ["property_supplier_payment_term_id"]})
+    payment_term_id = None
+    if vendor and vendor[0].get("property_supplier_payment_term_id"):
+        payment_term_id = vendor[0]["property_supplier_payment_term_id"][0]
+
     # Build the create payload. Order lines go in via the (0, 0, vals) syntax
     # which tells Odoo to create new linked records.
     order_lines = [
@@ -167,6 +176,8 @@ def create_draft_po(
         "order_line": order_lines,
         "origin": "Auto-generated: Replenishment Digest",
     }
+    if payment_term_id:
+        vals["payment_term_id"] = payment_term_id
 
     po_id = _execute(cfg, uid, models, "purchase.order", "create", [vals])
 
