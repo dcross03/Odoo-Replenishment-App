@@ -122,11 +122,18 @@ def _fetch_line_specs(
             qty = picked.get("min_qty") or 1.0
             price = picked.get("price") or 0.0
 
+       # Description matches Odoo's UI behavior: "[SKU] Name" on the first line,
+        # then the Purchase Description (from the product's Purchase tab) on
+        # subsequent lines if present.
+        base_desc = f"[{p.get('default_code') or ''}] {p.get('name') or ''}".strip()
+        purchase_desc = (p.get("description_purchase") or "").strip()
+        full_desc = f"{base_desc}\n{purchase_desc}" if purchase_desc else base_desc
+
         specs.append(POLineSpec(
             product_id=p["id"],
             qty=qty,
             price_unit=price,
-            description=f"[{p.get('default_code') or ''}] {p.get('name') or ''}".strip(),
+            description=full_desc,
         ))
     return specs
 
