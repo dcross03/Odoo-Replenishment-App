@@ -81,7 +81,8 @@ def _fetch_line_specs(
 
     products = _execute(cfg, uid, models, "product.product", "search_read",
         [[("id", "in", product_ids)]],
-        {"fields": ["id", "default_code", "name", "product_tmpl_id", "seller_ids"]},
+        {"fields": ["id", "default_code", "name", "product_tmpl_id",
+                    "seller_ids", "description_purchase"]},
     )
 
     # Batch-fetch all supplierinfo records referenced
